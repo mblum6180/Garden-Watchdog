@@ -24,7 +24,7 @@ CRGB leds[NUM_LEDS];
 void setup() {
   Serial.begin(115200);
   while (!Serial) {}
-
+  
   configureDeepSleep();
   configureWS2812BLed();
 
@@ -50,37 +50,58 @@ void configureDeepSleep() {
 
 float readTemperatureSensor() {
   byte addr[8];
-  if (!ds.search(addr)) {
-    Serial.println("No more addresses.");
-    ds.reset_search();
-    delay(250);
+  int retryCount = 0;
+  const int maxRetries = 10;
+  float fahrenheit = -1000.0;
+
+  while (retryCount < maxRetries && fahrenheit == -1000.0) {
+    if (!ds.search(addr)) {
+      Serial.println("No more addresses.");
+      ds.reset_search();
+      delay(250);
+    } else if (OneWire::crc8(addr, 7) != addr[7]) {
+      Serial.println("Address CRC is not valid!");
+    } else {
+      identifySensor(addr);
+
+      ds.reset();
+      ds.select(addr);
+      ds.write(0x44, 1);
+      delay(750);
+
+      ds.reset();
+      ds.select(addr);
+      ds.write(0xBE);
+
+      byte data[9];
+      for (byte i = 0; i < 9; i++) {
+        data[i] = ds.read();
+      }
+
+      if (OneWire::crc8(data, 8) != data[8]) {
+        Serial.println("Data CRC is not valid!");
+      } else {
+        int16_t raw = (data[1] << 8) | data[0];
+        float celsius = raw / 16.0;
+        fahrenheit = celsius * 1.8 + 32.0;
+
+        Serial.print("Temperature = ");
+        Serial.print(celsius);
+        Serial.print(" Celsius, ");
+        Serial.print(fahrenheit);
+        Serial.println(" Fahrenheit");
+      }
+    }
+
+    retryCount++;
+    if (fahrenheit == -1000.0) {
+      delay(250); // Wait before retrying
+    }
   }
 
-  identifySensor(addr);
-
-  ds.reset();
-  ds.select(addr);
-  ds.write(0x44, 1);
-  delay(750);
-
-  ds.reset();
-  ds.select(addr);
-  ds.write(0xBE);
-
-  byte data[9];
-  for (byte i = 0; i < 9; i++) {
-    data[i] = ds.read();
+  if (fahrenheit == -1000.0) {
+    Serial.println("Failed to read a valid temperature after maximum retries.");
   }
-
-  int16_t raw = (data[1] << 8) | data[0];
-  float celsius = raw / 16.0;
-  float fahrenheit = celsius * 1.8 + 32.0;
-
-  Serial.print("Temperature = ");
-  Serial.print(celsius);
-  Serial.print(" Celsius, ");
-  Serial.print(fahrenheit);
-  Serial.println(" Fahrenheit");
 
   return fahrenheit;
 }
@@ -135,6 +156,11 @@ void connectToWiFi() {
 }
 
 void updateThingSpeakChannel(float fahrenheit) {
+  if (fahrenheit == -1000.0) {
+    Serial.println("Sensor reading is not valid. Skipping channel update.");
+    return;
+  }
+
   int response = ThingSpeak.writeField(myChannelNumber, 1, fahrenheit, myWriteAPIKey);
   if (response == 200) {
     Serial.println("Channel update successful.");
@@ -142,6 +168,7 @@ void updateThingSpeakChannel(float fahrenheit) {
     Serial.println("Problem updating channel. HTTP error code " + String(response));
   }
 }
+
 
 void goToDeepSleep() {
   Serial.println("Going to sleep now");
