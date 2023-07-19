@@ -1,3 +1,4 @@
+//esp32
 #include <WiFi.h>
 #include "secrets.h"
 #include "ThingSpeak.h"
@@ -17,8 +18,8 @@ OneWire ds(14);
 #define TIME_TO_SLEEP 3600
 
 // WS2812B LED strip configuration
-#define NUM_LEDS 1
-#define DATA_PIN 25
+#define NUM_LEDS 9
+#define DATA_PIN 12
 CRGB leds[NUM_LEDS];
 
 void setup() {
@@ -32,6 +33,7 @@ void setup() {
   ThingSpeak.begin(client);
 
   float fahrenheit = readTemperatureSensor();
+  //fahrenheit = 90; // for testing leds
   setLedColorBasedOnTemperature(fahrenheit);
   connectToWiFi();
   updateThingSpeakChannel(fahrenheit);
@@ -180,20 +182,52 @@ void configureWS2812BLed() {
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
 }
 
-void setLedColorBasedOnTemperature(float fahrenheit) {
+CRGB determineColor(float fahrenheit) {
+  // Define temperature extremes
+  const float tempMin = 35.0;
+  const float tempMax = 80.0;
 
-  if (fahrenheit > 60) {
-    setColor(CRGB::Green); // Green for warm water
-  } else if (fahrenheit >= 50 && fahrenheit <= 60) {
-    setColor(CRGB::Yellow); // Yellow for cool water
-  } else if (fahrenheit < 50 && fahrenheit >= 40) {
-    setColor(CRGB::Blue); // Blue for cold water
-  } else {
-    setColor(CRGB::Red); // Red for water below 40
+  // Clip temperature values to our defined minimum and maximum
+  float tempClipped = min(max(fahrenheit, tempMin), tempMax);
+
+  // Scale temperature to a value between 0 and 255
+  uint8_t tempScaled = map(tempClipped, tempMin, tempMax, 0, 255);
+
+  // Define color ranges
+  CRGB colorCold = CRGB::Blue;       // Cold water
+  CRGB colorCool = CRGB::Cyan;       // Cool water
+  CRGB colorNeutral = CRGB::Green;   // Neutral water
+  CRGB colorWarm = CRGB::Yellow;     // Warm water
+  CRGB colorHot = CRGB::Red;         // Hot water
+
+  uint8_t r, g, b;
+  if (tempScaled < 51) {  // Lower part of the temperature range (cold to neutral)
+    r = lerp8by8(colorCold.r, colorNeutral.r, tempScaled * 5);
+    g = lerp8by8(colorCold.g, colorNeutral.g, tempScaled * 5);
+    b = lerp8by8(colorCold.b, colorNeutral.b, tempScaled * 5);
+  } else {  // Upper part of the temperature range (neutral to hot)
+    r = lerp8by8(colorNeutral.r, colorHot.r, (tempScaled - 51) * 5);
+    g = lerp8by8(colorNeutral.g, colorHot.g, (tempScaled - 51) * 5);
+    b = lerp8by8(colorNeutral.b, colorHot.b, (tempScaled - 51) * 5);
   }
+
+  CRGB color = CRGB(r, g, b);
+
+  return color;
+}
+
+
+
+
+
+void setLedColorBasedOnTemperature(float fahrenheit) {
+  CRGB color = determineColor(fahrenheit);
+  setColor(color);
 }
 
 void setColor(CRGB color) {
-  leds[0] = color;
+  for(int i = 0; i < NUM_LEDS; i++) {
+    leds[i] = color;
+  }
   FastLED.show();
 }
