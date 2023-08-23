@@ -208,8 +208,7 @@ CRGB determineColor(float fahrenheit) {
     g = lerp8by8(colorCold.g, colorNeutral.g, scaledFactor);
     b = lerp8by8(colorCold.b, colorNeutral.b, scaledFactor);
   } else {  // Upper part of the temperature range (neutral to hot)
-    scaledFactor = (tempScaled - 51) * 5;
-    scaledFactor = constrain(scaledFactor, 0, 255);  // ensure the value is between 0 and 255
+    scaledFactor = ((tempScaled - 51) * 255) / (255 - 51);  // ensure the value is between 0 and 255
     r = lerp8by8(colorNeutral.r, colorHot.r, scaledFactor);
     g = lerp8by8(colorNeutral.g, colorHot.g, scaledFactor);
     b = lerp8by8(colorNeutral.b, colorHot.b, scaledFactor);
