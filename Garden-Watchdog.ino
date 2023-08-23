@@ -26,7 +26,7 @@ void setup() {
   Serial.begin(115200);
   while (!Serial) {}
   
-  Delay(5000);
+  delay(5000);
 
   configureDeepSleep();
   configureWS2812BLed();
