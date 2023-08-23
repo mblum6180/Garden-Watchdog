@@ -201,14 +201,18 @@ CRGB determineColor(float fahrenheit) {
   CRGB colorHot = CRGB::Red;         // Hot water
 
   uint8_t r, g, b;
+  uint8_t scaledFactor;
   if (tempScaled < 51) {  // Lower part of the temperature range (cold to neutral)
-    r = lerp8by8(colorCold.r, colorNeutral.r, tempScaled * 5);
-    g = lerp8by8(colorCold.g, colorNeutral.g, tempScaled * 5);
-    b = lerp8by8(colorCold.b, colorNeutral.b, tempScaled * 5);
+    scaledFactor = tempScaled * 5;
+    r = lerp8by8(colorCold.r, colorNeutral.r, scaledFactor);
+    g = lerp8by8(colorCold.g, colorNeutral.g, scaledFactor);
+    b = lerp8by8(colorCold.b, colorNeutral.b, scaledFactor);
   } else {  // Upper part of the temperature range (neutral to hot)
-    r = lerp8by8(colorNeutral.r, colorHot.r, (tempScaled - 51) * 5);
-    g = lerp8by8(colorNeutral.g, colorHot.g, (tempScaled - 51) * 5);
-    b = lerp8by8(colorNeutral.b, colorHot.b, (tempScaled - 51) * 5);
+    scaledFactor = (tempScaled - 51) * 5;
+    scaledFactor = constrain(scaledFactor, 0, 255);  // ensure the value is between 0 and 255
+    r = lerp8by8(colorNeutral.r, colorHot.r, scaledFactor);
+    g = lerp8by8(colorNeutral.g, colorHot.g, scaledFactor);
+    b = lerp8by8(colorNeutral.b, colorHot.b, scaledFactor);
   }
 
   CRGB color = CRGB(r, g, b);
@@ -216,14 +220,11 @@ CRGB determineColor(float fahrenheit) {
   return color;
 }
 
-
-
-
-
 void setLedColorBasedOnTemperature(float fahrenheit) {
   CRGB color = determineColor(fahrenheit);
   setColor(color);
 }
+
 
 void setColor(CRGB color) {
   for(int i = 0; i < NUM_LEDS; i++) {
