@@ -2,7 +2,7 @@
 #include <WiFi.h>
 
 // Custom Libraries
-#include "secrets.h"
+#include "secrets.h" 
 #include "ThingSpeak.h"
 #include "LEDManager.h"
 #include "TemperatureSensor.h"
@@ -35,7 +35,10 @@ void setup() {
   //fahrenheit = 90; // for testing leds
   setLedColorBasedOnTemperature(fahrenheit);
   connectToWiFi();
-  updateThingSpeakChannel(fahrenheit);
+  // Read the internal temperature of the ESP32
+  float internalTempF = (temperatureRead() - 32) * (9.0/5.0) + 32; // Convert from Celsius to Fahrenheit if needed
+
+  updateThingSpeakChannel(fahrenheit, internalTempF);
 
   goToDeepSleep();
 }
@@ -63,13 +66,15 @@ void connectToWiFi() {
   }
 }
 
-void updateThingSpeakChannel(float fahrenheit) {
+void updateThingSpeakChannel(float fahrenheit, float internalTempF) {
   if (fahrenheit == -1000.0) {
     Serial.println("Sensor reading is not valid. Skipping channel update.");
     return;
   }
 
-  int response = ThingSpeak.writeField(myChannelNumber, 1, fahrenheit, myWriteAPIKey);
+  ThingSpeak.setField(1, fahrenheit);
+  ThingSpeak.setField(2, internalTempF);
+  int response = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
   if (response == 200) {
     Serial.println("Channel update successful.");
   } else {
