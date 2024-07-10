@@ -1,13 +1,9 @@
-// ESP32 Libraries
 #include <WiFi.h>
-
-// Custom Libraries
 #include "secrets.h" 
 #include "ThingSpeak.h"
 #include "LEDManager.h"
 #include "TemperatureSensor.h"
 
-// Network and ThingSpeak configuration
 char ssid[] = SECRET_SSID;
 char pass[] = SECRET_PASS;
 WiFiClient client;
@@ -17,12 +13,20 @@ const char *myWriteAPIKey = SECRET_WRITE_APIKEY;
 #define uS_TO_S_FACTOR 1000000ull
 #define TIME_TO_SLEEP 3600
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+uint8_t temprature_sens_read(); // Correct declaration for external C function.
+
+#ifdef __cplusplus
+}
+#endif
 
 void setup() {
   Serial.begin(115200);
   while (!Serial) {}
-  
+
   delay(5000);
 
   configureDeepSleep();
@@ -32,49 +36,50 @@ void setup() {
   ThingSpeak.begin(client);
 
   float fahrenheit = readTemperatureSensor();
-  //fahrenheit = 90; // for testing leds
   setLedColorBasedOnTemperature(fahrenheit);
-  connectToWiFi();
-  // Read the internal temperature of the ESP32
-  float internalTempF = (temperatureRead() - 32) * (9.0/5.0) + 32; // Convert from Celsius to Fahrenheit if needed
-
-  updateThingSpeakChannel(fahrenheit, internalTempF);
+  
+  if (connectToWiFi()) {
+    uint8_t internalTempF = temprature_sens_read(); // Internal temperature in Fahrenheit
+    updateThingSpeakChannel(fahrenheit, internalTempF);
+  } else {
+    Serial.println("Failed to connect to WiFi. Going to sleep.");
+  }
 
   goToDeepSleep();
 }
 
-void loop() {
-  // Empty as the code runs only in the setup() function
-}
+void loop() {}
 
 void configureDeepSleep() {
   esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
-  Serial.println("Setup ESP32 to sleep for every " + String(TIME_TO_SLEEP) + " Seconds");
+  Serial.println("ESP32 configured to deep sleep for every " + String(TIME_TO_SLEEP) + " seconds.");
 }
 
-
-void connectToWiFi() {
+bool connectToWiFi() {
+  Serial.print("Connecting to SSID: " + String(ssid));
+  WiFi.begin(ssid, pass);
+  
+  int retry_count = 0;
+  while (WiFi.status() != WL_CONNECTED && retry_count < 3) {
+    delay(5000);
+    Serial.print(".");
+    retry_count++;
+  }
+  
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.print("Attempting to connect to SSID: ");
-    Serial.println(SECRET_SSID);
-    while (WiFi.status() != WL_CONNECTED) {
-      WiFi.begin(ssid, pass);
-      Serial.print(".");
-      delay(5000);
-    }
-    Serial.println("\nConnected.");
+    Serial.println("\nFailed to connect.");
+    return false;
   }
+
+  Serial.println("\nConnected.");
+  return true;
 }
 
-void updateThingSpeakChannel(float fahrenheit, float internalTempF) {
-  if (fahrenheit == -1000.0) {
-    Serial.println("Sensor reading is not valid. Skipping channel update.");
-    return;
-  }
-
-  ThingSpeak.setField(1, fahrenheit);
-  ThingSpeak.setField(2, internalTempF);
+void updateThingSpeakChannel(float fahrenheit, uint8_t internalTempF) {
+  ThingSpeak.setField(1, fahrenheit);         // External temperature
+  ThingSpeak.setField(2, internalTempF);      // Internal temperature
   int response = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
+  
   if (response == 200) {
     Serial.println("Channel update successful.");
   } else {
@@ -82,10 +87,8 @@ void updateThingSpeakChannel(float fahrenheit, float internalTempF) {
   }
 }
 
-
 void goToDeepSleep() {
-  Serial.println("Going to sleep now");
+  Serial.println("Going to sleep now.");
   Serial.flush();
   esp_deep_sleep_start();
 }
-
